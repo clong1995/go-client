@@ -63,7 +63,7 @@ func Do[T any](uid uint64, api string, param any, type_ string) (res T, err erro
 		_ = response.Body.Close()
 	}()
 	if response.StatusCode != http.StatusOK {
-		err = fmt.Errorf("status code: %d", http.StatusOK)
+		err = fmt.Errorf("%d", response.StatusCode)
 		log.Println(err)
 		return
 	}
