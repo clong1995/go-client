@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/clong1995/go-encipher/gob"
 	"github.com/clong1995/go-encipher/json"
-	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -22,7 +21,7 @@ func init() {
 	}
 }
 
-func Do(uid uint64, api string, param any, type_ string) (res []byte, err error) {
+func Do[T any](uid uint64, api string, param any, type_ string) (res T, err error) {
 	u, err := url.Parse(api)
 	if err != nil {
 		log.Println(err)
@@ -68,10 +67,23 @@ func Do(uid uint64, api string, param any, type_ string) (res []byte, err error)
 		log.Println(err)
 		return
 	}
-	if res, err = io.ReadAll(response.Body); err != nil {
+
+	/*body, err := io.ReadAll(response.Body)
+	if err != nil {
 		log.Println(err)
 		return
-	}
+	}*/
 
+	if type_ == "JSON" {
+		if err = json.Decode(response.Body, &res); err != nil {
+			log.Println(err)
+			return
+		}
+	} else if type_ == "GOB" {
+		if err = gob.Decode(response.Body, &res); err != nil {
+			log.Println(err)
+			return
+		}
+	}
 	return
 }
