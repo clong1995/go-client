@@ -3,9 +3,9 @@ package client
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"github.com/clong1995/go-encipher/gob"
 	"github.com/clong1995/go-encipher/json"
+	"io"
 	"log"
 	"net/http"
 	"net/url"
@@ -63,16 +63,15 @@ func Do[T any](uid uint64, api string, param any, type_ string) (res T, err erro
 		_ = response.Body.Close()
 	}()
 	if response.StatusCode != http.StatusOK {
-		err = fmt.Errorf("%d", response.StatusCode)
+		var body []byte
+		if body, err = io.ReadAll(response.Body); err != nil {
+			log.Println(err)
+			return
+		}
+		err = errors.New(string(body))
 		log.Println(err)
 		return
 	}
-
-	/*body, err := io.ReadAll(response.Body)
-	if err != nil {
-		log.Println(err)
-		return
-	}*/
 
 	if type_ == "JSON" {
 		if err = json.Decode(response.Body, &res); err != nil {
