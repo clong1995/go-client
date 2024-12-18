@@ -21,7 +21,7 @@ func init() {
 	}
 }
 
-func Do[T any](uid uint64, api string, param any, type_ string) (res T, err error) {
+func Do[T any](uid int64, api string, param any, type_ string) (res T, err error) {
 	u, err := url.Parse(api)
 	if err != nil {
 		log.Println(err)
@@ -53,7 +53,8 @@ func Do[T any](uid uint64, api string, param any, type_ string) (res T, err erro
 		log.Println(err)
 		return
 	}
-	request.Header.Set("user-id", strconv.FormatUint(uid, 10))
+
+	request.Header.Set("user-id", strconv.FormatInt(uid, 10))
 	response, err := client.Do(request)
 	if err != nil {
 		log.Println(err)
