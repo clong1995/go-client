@@ -1,7 +1,7 @@
 module github.com/clong1995/go-client
 
-go 1.23.2
+go 1.23.3
 
-toolchain go1.23.3
+require github.com/clong1995/go-encipher v0.0.0-20241216125944-19179576c81b
 
-require github.com/clong1995/go-encipher v0.0.0-20241126103623-7aaed3f5b78b
+//replace github.com/clong1995/go-encipher => /Users/huazhimeng/Desktop/golang_mod/go-encipher
