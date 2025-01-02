@@ -54,7 +54,10 @@ func Do[T any](uid int64, api string, param any, type_ string, header ...map[str
 		return
 	}
 
-	request.Header.Set("user-id", strconv.FormatInt(uid, 10))
+	if uid != 0 {
+		request.Header.Set("user-id", strconv.FormatInt(uid, 10))
+	}
+
 	if len(header) > 0 {
 		for k, v := range header[0] {
 			request.Header.Set(k, v)
