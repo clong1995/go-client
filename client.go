@@ -21,7 +21,7 @@ func init() {
 	}
 }
 
-func Do[T any](uid int64, api string, param any, type_ string, header ...map[string]string) (res T, err error) {
+func Do[T any](uid int64, api, method string, param any, type_ string, header ...map[string]string) (res T, err error) {
 	u, err := url.Parse(api)
 	if err != nil {
 		log.Println(err)
@@ -48,7 +48,7 @@ func Do[T any](uid int64, api string, param any, type_ string, header ...map[str
 		}
 	}
 
-	request, err := http.NewRequest("POST", u.String(), &buffer)
+	request, err := http.NewRequest(method, u.String(), &buffer)
 	if err != nil {
 		log.Println(err)
 		return
