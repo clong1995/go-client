@@ -31,20 +31,29 @@ func Do[T any](uid int64, api, method string, param any, type_ string, header ..
 	var buffer bytes.Buffer
 
 	if param != nil {
-		if type_ == "JSON" {
-			if err = json.Encode(param, &buffer); err != nil {
-				log.Println(err)
-				return
+		if method == http.MethodGet {
+			options := param.(map[string]string)
+			q := u.Query()
+			for k, v := range options {
+				q.Set(k, v)
 			}
-		} else if type_ == "GOB" {
-			if err = gob.Encode(param, &buffer); err != nil {
-				log.Println(err)
-				return
-			}
+			u.RawQuery = q.Encode()
 		} else {
-			err = errors.New("type is required")
-			log.Println(err)
-			return
+			if type_ == "JSON" {
+				if err = json.Encode(param, &buffer); err != nil {
+					log.Println(err)
+					return
+				}
+			} else if type_ == "GOB" {
+				if err = gob.Encode(param, &buffer); err != nil {
+					log.Println(err)
+					return
+				}
+			} else {
+				err = errors.New("type is required")
+				log.Println(err)
+				return
+			}
 		}
 	}
 
