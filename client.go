@@ -110,6 +110,13 @@ func Do[T any](uid int64, api, method string, param any, type_ int, header ...ma
 			log.Println(err)
 			return
 		}
+	} else if type_ == BYTES {
+		var body any
+		if body, err = io.ReadAll(response.Body); err != nil {
+			log.Println(err)
+			return
+		}
+		res = body.(T)
 	}
 	return
 }

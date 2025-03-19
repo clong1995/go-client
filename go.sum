@@ -1,2 +1,4 @@
 github.com/clong1995/go-encipher v0.0.0-20241218020040-255476422b2d h1:5il/kZgGaAWgdppELeszE1HYfq6YHNlJGwDDf5ISvpg=
 github.com/clong1995/go-encipher v0.0.0-20241218020040-255476422b2d/go.mod h1:3MPxLLrBs8YEUnpefM9A5dlro0IA4LNpluFOOiS1nLw=
+github.com/clong1995/go-encipher v0.0.0-20250319014906-eb1693b556b1 h1:DURFV6WhMwuzD479S4yiQVuVbnccjsEN3Ls+mhJsFOc=
+github.com/clong1995/go-encipher v0.0.0-20250319014906-eb1693b556b1/go.mod h1:3MPxLLrBs8YEUnpefM9A5dlro0IA4LNpluFOOiS1nLw=
