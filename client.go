@@ -37,7 +37,7 @@ func Do[T any](uid int64, api, method string, param any, type_ int, header ...ma
 		return
 	}
 
-	var buffer *bytes.Buffer
+	var buffer bytes.Buffer
 
 	if param != nil {
 		if method == http.MethodGet {
@@ -49,17 +49,17 @@ func Do[T any](uid int64, api, method string, param any, type_ int, header ...ma
 			u.RawQuery = q.Encode()
 		} else {
 			if type_ == JSON {
-				if err = json.Encode(param, buffer); err != nil {
+				if err = json.Encode(param, &buffer); err != nil {
 					log.Println(err)
 					return
 				}
 			} else if type_ == GOB {
-				if err = gob.Encode(param, buffer); err != nil {
+				if err = gob.Encode(param, &buffer); err != nil {
 					log.Println(err)
 					return
 				}
 			} else if type_ == BYTES {
-				buffer = bytes.NewBuffer(param.([]byte))
+				buffer = *bytes.NewBuffer(param.([]byte))
 			} else {
 				err = errors.New("type is required")
 				log.Println(err)
@@ -68,7 +68,7 @@ func Do[T any](uid int64, api, method string, param any, type_ int, header ...ma
 		}
 	}
 
-	request, err := http.NewRequest(method, u.String(), buffer)
+	request, err := http.NewRequest(method, u.String(), &buffer)
 	if err != nil {
 		log.Println(err)
 		return
