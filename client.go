@@ -42,10 +42,10 @@ func Do[T any](uid int64, api, method string, param any, type_ int, header ...ma
 
 	if param != nil {
 		if method == http.MethodGet {
-			options := param.(map[string]string)
+			options := param.(map[string]any)
 			q := u.Query()
 			for k, v := range options {
-				q.Set(k, v)
+				q.Set(k, fmt.Sprintf("%v", v))
 			}
 			u.RawQuery = q.Encode()
 		} else {
