@@ -2,125 +2,169 @@ package client
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
-	"github.com/clong1995/go-encipher/gob"
-	"github.com/clong1995/go-encipher/json"
 	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"strconv"
 	"time"
+
+	"github.com/pkg/errors"
+
+	"github.com/clong1995/go-encipher/gob"
+	"github.com/clong1995/go-encipher/json"
 )
 
-var client *http.Client
-
-func init() {
-	client = &http.Client{
-		Timeout: 10 * time.Second,
-	}
+// client 是一个可复用的HTTP客户端，具有10秒的超时设置。
+var client = &http.Client{
+	Timeout: 10 * time.Second,
 }
 
+// 定义支持的内容类型常量
 const (
-	JSON = iota
-	GOB
-	BYTES
+	JSON  = iota // JSON 格式
+	GOB          // GOB 格式
+	BYTES        // 原始字节流
 )
 
-// Do 发起请求
-// type_: 对方接口接收数据的类型JSON,GOB,BYTES
-// res T: 按照约定，对方返回的要和请求的类型相同,T范型会自序列化为对应的类型,当type_为BYTES,范型必须为[]byte
-func Do[T any](uid int64, api, method string, param any, type_ int, header ...map[string]any) (res T, err error) {
+// Do 发起一个HTTP请求。
+// 这是一个泛型函数，可以自动处理不同类型的请求和响应数据。
+//
+// @param uid 用户ID，如果非0，会作为 "user-id" 请求头发送。
+// @param api 请求的URL地址。
+// @param method HTTP请求方法 (例如 http.MethodGet, http.MethodPost)。
+// @param param 请求参数。对于GET请求，应为 map[string]any 或 map[string]string；对于其他请求，为要编码的请求体。
+// @param contentType 请求体和响应体的编码类型 (JSON, GOB, BYTES)。
+// @param header 一个可选的 map，用于设置额外的请求头。
+// @return T 响应结果，其类型由调用者指定。函数会根据 contentType 自动解码。
+// @return error 如果请求过程中发生错误，则返回错误信息。
+func Do[T any](uid int64, api, method string, param any, contentType int, header map[string]any) (T, error) {
+	var res T // 初始化响应结果变量
+
+	// 1. 解析API URL
 	u, err := url.Parse(api)
 	if err != nil {
-		log.Println(err)
-		return
+		return res, errors.Wrap(err, "url parse error: URL地址解析失败")
 	}
 
-	var buffer bytes.Buffer
+	var body io.Reader // 请求体
 
+	// 2. 处理请求参数
 	if param != nil {
 		if method == http.MethodGet {
-			options := param.(map[string]any)
+			// 对于GET请求，将参数编码到URL查询字符串中
 			q := u.Query()
-			for k, v := range options {
-				q.Set(k, fmt.Sprintf("%v", v))
+			switch p := param.(type) {
+			case map[string]any:
+				for k, v := range p {
+					q.Set(k, fmt.Sprintf("%v", v))
+				}
+			case map[string]string:
+				for k, v := range p {
+					q.Set(k, v)
+				}
+			default:
+				return res, errors.New("for GET requests, param must be map[string]any or map[string]string: GET请求的参数必须是 map[string]any 或 map[string]string")
 			}
 			u.RawQuery = q.Encode()
 		} else {
-			if type_ == JSON {
-				if err = json.Encode(param, &buffer); err != nil {
-					log.Println(err)
-					return
+			// 对于非GET请求（如POST, PUT等），将参数编码到请求体中
+			buf := new(bytes.Buffer)
+			switch contentType {
+			case JSON:
+				// 使用JSON编码
+				if err = json.Encode(param, buf); err != nil {
+					return res, errors.Wrap(err, "json encode error: JSON编码失败")
 				}
-			} else if type_ == GOB {
-				if err = gob.Encode(param, &buffer); err != nil {
-					log.Println(err)
-					return
+			case GOB:
+				// 使用GOB编码
+				if err = gob.Encode(param, buf); err != nil {
+					return res, errors.Wrap(err, "gob encode error: GOB编码失败")
 				}
-			} else if type_ == BYTES {
-				buffer = *bytes.NewBuffer(param.([]byte))
-			} else {
-				err = errors.New("type is required")
-				log.Println(err)
-				return
+			case BYTES:
+				// 直接使用原始字节
+				if b, ok := param.([]byte); ok {
+					buf.Write(b)
+				} else {
+					return res, errors.New("for BYTES content type, param must be []byte: BYTES类型的内容，参数必须是 []byte")
+				}
+			default:
+				return res, errors.New("unsupported content type: 不支持的内容类型")
 			}
+			body = buf
 		}
 	}
 
-	request, err := http.NewRequest(method, u.String(), &buffer)
+	// 3. 创建HTTP请求
+	request, err := http.NewRequest(method, u.String(), body)
 	if err != nil {
-		log.Println(err)
-		return
+		return res, errors.Wrap(err, "http new request error: 创建HTTP请求失败")
 	}
 
+	// 4. 设置请求头
+	// 根据内容类型设置Content-Type
+	switch contentType {
+	case JSON:
+		request.Header.Set("Content-Type", "application/json")
+	case GOB, BYTES:
+		request.Header.Set("Content-Type", "application/octet-stream")
+	}
+
+	// 如果提供了用户ID，则设置user-id请求头
 	if uid != 0 {
 		request.Header.Set("user-id", strconv.FormatInt(uid, 10))
 	}
 
-	if len(header) > 0 {
-		for k, v := range header[0] {
+	// 设置自定义的额外请求头
+	if header != nil {
+		for k, v := range header {
 			request.Header.Set(k, fmt.Sprintf("%v", v))
 		}
 	}
 
+	// 5. 发送HTTP请求
 	response, err := client.Do(request)
 	if err != nil {
-		log.Println(err)
-		return
+		return res, errors.Wrap(err, "http client do error: 执行HTTP请求失败")
 	}
-	defer func() {
-		_ = response.Body.Close()
-	}()
+	// 确保响应体在函数结束时关闭
+	defer response.Body.Close()
+
+	// 6. 检查HTTP响应状态码
 	if response.StatusCode != http.StatusOK {
-		var body []byte
-		if body, err = io.ReadAll(response.Body); err != nil {
-			log.Println(err)
-			return
+		responseBody, readErr := io.ReadAll(response.Body)
+		if readErr != nil {
+			return res, errors.Wrapf(readErr, "failed to read error response body (HTTP status: %d): 读取错误响应体失败", response.StatusCode)
 		}
-		err = errors.New(string(body))
-		log.Println(err)
-		return
+		return res, fmt.Errorf("http request failed with status %d: %s: HTTP请求失败，状态码 %d", response.StatusCode, string(responseBody), response.StatusCode)
 	}
 
-	if type_ == JSON {
+	// 7. 根据内容类型解码响应体
+	switch contentType {
+	case JSON:
+		// 使用JSON解码
 		if err = json.Decode(response.Body, &res); err != nil {
-			log.Println(err)
-			return
+			return res, errors.Wrap(err, "json decode response error: JSON解码响应失败")
 		}
-	} else if type_ == GOB { // gob可以返回任何类型的结果，T 是啥就是啥
+	case GOB:
+		// 使用GOB解码
 		if err = gob.Decode(response.Body, &res); err != nil {
-			log.Println(err)
-			return
+			return res, errors.Wrap(err, "gob decode response error: GOB解码响应失败")
 		}
-	} else if type_ == BYTES {
-		var body any
-		if body, err = io.ReadAll(response.Body); err != nil {
-			log.Println(err)
-			return
+	case BYTES:
+		// 读取原始字节
+		responseBody, readErr := io.ReadAll(response.Body)
+		if readErr != nil {
+			return res, errors.Wrap(readErr, "read response body error: 读取响应体失败")
 		}
-		res = body.(T)
+		// 确保泛型T是[]byte类型
+		if v, ok := any(&res).(*[]byte); ok {
+			*v = responseBody
+		} else {
+			return res, fmt.Errorf("when contentType is BYTES, T must be []byte, but got %T: 当内容类型为BYTES时, 泛型T必须是[]byte, 但实际为 %T", res)
+		}
 	}
-	return
+
+	// 8. 返回成功解码的结果
+	return res, nil
 }
