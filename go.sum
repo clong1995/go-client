@@ -6,3 +6,7 @@ github.com/clong1995/go-encipher v0.0.0-20250714045541-ede16e86a49d h1:jF8iECFTA
 github.com/clong1995/go-encipher v0.0.0-20250714045541-ede16e86a49d/go.mod h1:GUqy14j6tPellfqlirkc3+8FJMLPM1eCu/y6V5n6jmo=
 github.com/clong1995/go-encipher v0.0.0-20251108150327-0dacce296f80 h1:fjbTa21re2LmUvW4SUiLfmCnAB7SptkK15Hz3Yu88Lg=
 github.com/clong1995/go-encipher v0.0.0-20251108150327-0dacce296f80/go.mod h1:GUqy14j6tPellfqlirkc3+8FJMLPM1eCu/y6V5n6jmo=
+github.com/clong1995/go-encipher v0.0.0-20260315015454-e8484a857e2e h1:ylqIrJOHEn6VpiAgfAW4SnlQHicvQe6qiE0w+6wJ7zQ=
+github.com/clong1995/go-encipher v0.0.0-20260315015454-e8484a857e2e/go.mod h1:1TMBSjXSpknPKuJ3CPl+F5ayJvI3wG1nSnid1Co8xB0=
+github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
+github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
