@@ -1,15 +1,16 @@
 package client
 
 import (
+	"net/http"
 	"testing"
 )
 
 func TestDo(t *testing.T) {
 	type args struct {
-		uid   uint64
+		uid   int64
 		api   string
 		param any
-		type_ string
+		type_ int
 	}
 	tests := []struct {
 		name    string
@@ -28,13 +29,13 @@ func TestDo(t *testing.T) {
 					Session: 2502938842714124288,
 					Path:    "/user/login/post",
 				},
-				type_: "GOB",
+				type_: 0,
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotRes, err := Do(tt.args.uid, tt.args.api, tt.args.param, tt.args.type_)
+			gotRes, err := Do[any](tt.args.uid, tt.args.api, http.MethodPost, tt.args.param, tt.args.type_)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Do() error = %v, wantErr %v", err, tt.wantErr)
 				return
