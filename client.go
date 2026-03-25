@@ -38,7 +38,7 @@ const (
 // @param header 一个可选的 map，用于设置额外的请求头。
 // @return T 响应结果，其类型由调用者指定。函数会根据 contentType 自动解码。
 // @return error 如果请求过程中发生错误，则返回错误信息。
-func Do[T any](uid int64, api, method string, param any, contentType int, header map[string]any) (T, error) {
+func Do[T any](uid int64, api, method string, param any, contentType int, header ...map[string]any) (T, error) {
 	var res T // 初始化响应结果变量
 
 	// 1. 解析API URL
@@ -116,8 +116,8 @@ func Do[T any](uid int64, api, method string, param any, contentType int, header
 	}
 
 	// 设置自定义的额外请求头
-	if header != nil {
-		for k, v := range header {
+	if len(header) > 0 {
+		for k, v := range header[0] {
 			request.Header.Set(k, fmt.Sprintf("%v", v))
 		}
 	}
