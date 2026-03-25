@@ -116,7 +116,7 @@ func Do[T any](uid int64, api, method string, param any, contentType int, header
 	}
 
 	// 设置自定义的额外请求头
-	if len(header) > 0 {
+	if len(header) > 0 && header[0] != nil {
 		for k, v := range header[0] {
 			request.Header.Set(k, fmt.Sprintf("%v", v))
 		}
