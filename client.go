@@ -22,9 +22,10 @@ var client = &http.Client{
 
 // 定义支持的内容类型常量
 const (
-	JSON  = iota // JSON 格式
-	GOB          // GOB 格式
-	BYTES        // 原始字节流
+	NIL   = iota
+	JSON  // JSON 格式
+	GOB   // GOB 格式
+	BYTES // 原始字节流
 )
 
 // Do 发起一个HTTP请求。
@@ -38,13 +39,13 @@ const (
 // @param header 一个可选的 map，用于设置额外的请求头。
 // @return T 响应结果，其类型由调用者指定。函数会根据 contentType 自动解码。
 // @return error 如果请求过程中发生错误，则返回错误信息。
-func Do[T any](uid int64, api, method string, param any, contentType int, header ...map[string]any) (T, error) {
+func Do[T any](uid int64, api, method string, param any, reqContentType, respContentType int, header ...map[string]any) (T, error) {
 	var res T // 初始化响应结果变量
 
 	// 1. 解析API URL
 	u, err := url.Parse(api)
 	if err != nil {
-		return res, errors.Wrap(err, "url parse error: URL地址解析失败")
+		return res, errors.WithStack(err)
 	}
 
 	var body io.Reader // 请求体
@@ -64,50 +65,67 @@ func Do[T any](uid int64, api, method string, param any, contentType int, header
 					q.Set(k, v)
 				}
 			default:
-				return res, errors.New("for GET requests, param must be map[string]any or map[string]string: GET请求的参数必须是 map[string]any 或 map[string]string")
+				return res, errors.New("for GET requests, param must be map[string]any or map[string]string")
 			}
 			u.RawQuery = q.Encode()
 		} else {
 			// 对于非GET请求（如POST, PUT等），将参数编码到请求体中
-			buf := new(bytes.Buffer)
-			switch contentType {
+			//buf := new(bytes.Buffer)
+			switch reqContentType {
 			case JSON:
+				buf := new(bytes.Buffer)
 				// 使用JSON编码
 				if err = json.Encode(param, buf); err != nil {
-					return res, errors.Wrap(err, "json encode error: JSON编码失败")
+					return res, errors.WithStack(err)
 				}
+				body = buf
 			case GOB:
+				buf := new(bytes.Buffer)
 				// 使用GOB编码
 				if err = gob.Encode(param, buf); err != nil {
-					return res, errors.Wrap(err, "gob encode error: GOB编码失败")
+					return res, errors.WithStack(err)
 				}
+				body = buf
 			case BYTES:
 				// 直接使用原始字节
 				if b, ok := param.([]byte); ok {
-					buf.Write(b)
+					body = bytes.NewReader(b)
 				} else {
-					return res, errors.New("for BYTES content type, param must be []byte: BYTES类型的内容，参数必须是 []byte")
+					return res, errors.New("for BYTES content type, param must be []byte")
 				}
+			case NIL:
+				// 什么都不做，body 保持为 nil
 			default:
-				return res, errors.New("unsupported content type: 不支持的内容类型")
+				return res, errors.New("unsupported content type")
 			}
-			body = buf
 		}
 	}
 
 	// 3. 创建HTTP请求
 	request, err := http.NewRequest(method, u.String(), body)
 	if err != nil {
-		return res, errors.Wrap(err, "http new request error: 创建HTTP请求失败")
+		return res, errors.WithStack(err)
 	}
 
 	// 4. 设置请求头
 	// 根据内容类型设置Content-Type
-	switch contentType {
+	if body != nil {
+		switch reqContentType {
+		case JSON:
+			request.Header.Set("Content-Type", "application/json")
+		case GOB, BYTES:
+			request.Header.Set("Content-Type", "application/octet-stream")
+		case NIL:
+		}
+	}
+
+	// 根据期望的响应内容类型设置 Accept 头
+	switch respContentType {
 	case JSON:
-		request.Header.Set("Content-Type", "application/json")
+		request.Header.Set("Accept", "application/json")
 	case GOB, BYTES:
-		request.Header.Set("Content-Type", "application/octet-stream")
+		request.Header.Set("Accept", "application/octet-stream")
+	case NIL:
 	}
 
 	// 如果提供了用户ID，则设置user-id请求头
@@ -125,44 +143,55 @@ func Do[T any](uid int64, api, method string, param any, contentType int, header
 	// 5. 发送HTTP请求
 	response, err := client.Do(request)
 	if err != nil {
-		return res, errors.Wrap(err, "http client do error: 执行HTTP请求失败")
+		return res, errors.WithStack(err)
 	}
-	// 确保响应体在函数结束时关闭
-	defer response.Body.Close()
+
+	// 确保响应体在函数结束时关闭，并排空以便复用连接
+	defer func() {
+		_, _ = io.Copy(io.Discard, response.Body)
+		response.Body.Close()
+	}()
 
 	// 6. 检查HTTP响应状态码
-	if response.StatusCode != http.StatusOK {
+	if response.StatusCode < http.StatusOK || response.StatusCode >= http.StatusMultipleChoices {
 		responseBody, readErr := io.ReadAll(response.Body)
 		if readErr != nil {
-			return res, errors.Wrapf(readErr, "failed to read error response body (HTTP status: %d): 读取错误响应体失败", response.StatusCode)
+			return res, errors.WithStack(readErr)
 		}
-		return res, fmt.Errorf("http request failed with status %d: %s: HTTP请求失败，状态码 %d", response.StatusCode, string(responseBody), response.StatusCode)
+		return res, errors.Errorf("http request failed with status %d: \nbody:%s", response.StatusCode, string(responseBody))
+	}
+
+	// 如果是 204 No Content，直接返回，避免解析空响应体报错
+	if response.StatusCode == http.StatusNoContent {
+		return res, nil
 	}
 
 	// 7. 根据内容类型解码响应体
-	switch contentType {
+	switch respContentType {
 	case JSON:
 		// 使用JSON解码
 		if err = json.Decode(response.Body, &res); err != nil {
-			return res, errors.Wrap(err, "json decode response error: JSON解码响应失败")
+			return res, errors.WithStack(err)
 		}
 	case GOB:
 		// 使用GOB解码
 		if err = gob.Decode(response.Body, &res); err != nil {
-			return res, errors.Wrap(err, "gob decode response error: GOB解码响应失败")
+			return res, errors.WithStack(err)
 		}
 	case BYTES:
 		// 读取原始字节
 		responseBody, readErr := io.ReadAll(response.Body)
 		if readErr != nil {
-			return res, errors.Wrap(readErr, "read response body error: 读取响应体失败")
+			return res, errors.WithStack(readErr)
 		}
 		// 确保泛型T是[]byte类型
 		if v, ok := any(&res).(*[]byte); ok {
 			*v = responseBody
 		} else {
-			return res, fmt.Errorf("when contentType is BYTES, T must be []byte, but got %T: 当内容类型为BYTES时, 泛型T必须是[]byte, 但实际为 %T", res)
+			return res, errors.Errorf("when contentType is BYTES, T must be []byte, but got %T", res)
 		}
+	default:
+		return res, errors.New("unsupported content type")
 	}
 
 	// 8. 返回成功解码的结果
