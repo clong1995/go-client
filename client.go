@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -22,23 +23,14 @@ var client = &http.Client{
 
 // 定义支持的内容类型常量
 const (
-	NIL   = iota
-	JSON  // JSON 格式
-	GOB   // GOB 格式
-	BYTES // 原始字节流
+	NIL      = iota
+	JSON     // JSON 格式
+	GOB      // GOB 格式
+	BYTES    // 原始字节流
+	FORMDATA // form-data
 )
 
 // Do 发起一个HTTP请求。
-// 这是一个泛型函数，可以自动处理不同类型的请求和响应数据。
-//
-// @param uid 用户ID，如果非0，会作为 "user-id" 请求头发送。
-// @param api 请求的URL地址。
-// @param method HTTP请求方法 (例如 http.MethodGet, http.MethodPost)。
-// @param param 请求参数。对于GET请求，应为 map[string]any 或 map[string]string；对于其他请求，为要编码的请求体。
-// @param contentType 请求体和响应体的编码类型 (JSON, GOB, BYTES)。
-// @param header 一个可选的 map，用于设置额外的请求头。
-// @return T 响应结果，其类型由调用者指定。函数会根据 contentType 自动解码。
-// @return error 如果请求过程中发生错误，则返回错误信息。
 func Do[T any](uid int64, api, method string, param any, reqContentType, respContentType int, header ...map[string]any) (T, error) {
 	var res T // 初始化响应结果变量
 
@@ -48,7 +40,8 @@ func Do[T any](uid int64, api, method string, param any, reqContentType, respCon
 		return res, errors.WithStack(err)
 	}
 
-	var body io.Reader // 请求体
+	body := &bytes.Buffer{} // 请求体
+	var writer *multipart.Writer
 
 	// 2. 处理请求参数
 	if param != nil {
@@ -87,11 +80,28 @@ func Do[T any](uid int64, api, method string, param any, reqContentType, respCon
 				}
 				body = buf
 			case BYTES:
-				// 直接使用原始字节
-				if b, ok := param.([]byte); ok {
-					body = bytes.NewReader(b)
+				if r, ok := param.(*bytes.Buffer); ok {
+					body = r
 				} else {
-					return res, errors.New("for BYTES content type, param must be []byte")
+					return res, errors.New("for BYTES content type, param must be io.Reader")
+				}
+			case FORMDATA:
+				if r, ok := param.(map[string]string); ok {
+					writer = multipart.NewWriter(body)
+					defer func() {
+						_ = writer.Close()
+					}()
+					for key, value := range r {
+						if err = writer.WriteField(key, value); err != nil {
+							return res, errors.WithStack(err)
+						}
+					}
+					// 关闭 writer，此时会写入最终的 boundary 结束符
+					if err = writer.Close(); err != nil {
+						return res, errors.WithStack(err)
+					}
+				} else {
+					return res, errors.New("for FORMDATA content type, param must be map[string]string")
 				}
 			case NIL:
 				// 什么都不做，body 保持为 nil
@@ -115,6 +125,10 @@ func Do[T any](uid int64, api, method string, param any, reqContentType, respCon
 			request.Header.Set("Content-Type", "application/json")
 		case GOB, BYTES:
 			request.Header.Set("Content-Type", "application/octet-stream")
+		case FORMDATA:
+			if writer != nil {
+				request.Header.Set("Content-Type", writer.FormDataContentType())
+			}
 		case NIL:
 		}
 	}
