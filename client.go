@@ -80,10 +80,10 @@ func Do[T any](uid int64, api, method string, param any, reqContentType, respCon
 				}
 				body = buf
 			case BYTES:
-				if r, ok := param.(*bytes.Buffer); ok {
-					body = r
+				if b, ok := param.([]byte); ok {
+					body = bytes.NewBuffer(b)
 				} else {
-					return res, errors.New("for BYTES content type, param must be io.Reader")
+					return res, errors.New("for BYTES content type, param must be []byte")
 				}
 			case FORMDATA:
 				if r, ok := param.(map[string]string); ok {
@@ -140,6 +140,7 @@ func Do[T any](uid int64, api, method string, param any, reqContentType, respCon
 	case GOB, BYTES:
 		request.Header.Set("Accept", "application/octet-stream")
 	case NIL:
+	default:
 	}
 
 	// 如果提供了用户ID，则设置user-id请求头
