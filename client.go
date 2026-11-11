@@ -18,9 +18,9 @@ import (
 
 // client 是一个可复用的HTTP客户端，具有10秒的超时设置。
 var client = &http.Client{
-	Timeout: 60 * time.Second,
+	Timeout: 35 * time.Second,
 	Transport: &http.Transport{
-		MaxIdleConns:        200,
+		MaxIdleConns:        1000,
 		MaxIdleConnsPerHost: 100,
 		IdleConnTimeout:     60 * time.Second,
 	},
