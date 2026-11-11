@@ -20,8 +20,8 @@ import (
 var client = &http.Client{
 	Timeout: 60 * time.Second,
 	Transport: &http.Transport{
-		MaxIdleConns:        20,
-		MaxIdleConnsPerHost: 10,
+		MaxIdleConns:        200,
+		MaxIdleConnsPerHost: 100,
 		IdleConnTimeout:     60 * time.Second,
 	},
 }
@@ -109,7 +109,7 @@ func Do[T any](uid int64, api, method string, param any, reqContentType, respCon
 					return res, errors.New("for FORMDATA content type, param must be map[string]string")
 				}
 			case NIL:
-				// 什么都不做，body 保持为 nil
+				// 什么都不做
 			default:
 				return res, errors.New("unsupported content type")
 			}
@@ -124,18 +124,16 @@ func Do[T any](uid int64, api, method string, param any, reqContentType, respCon
 
 	// 4. 设置请求头
 	// 根据内容类型设置Content-Type
-	if body != nil {
-		switch reqContentType {
-		case JSON:
-			request.Header.Set("Content-Type", "application/json")
-		case GOB, BYTES:
-			request.Header.Set("Content-Type", "application/octet-stream")
-		case FORMDATA:
-			if writer != nil {
-				request.Header.Set("Content-Type", writer.FormDataContentType())
-			}
-		case NIL:
+	switch reqContentType {
+	case JSON:
+		request.Header.Set("Content-Type", "application/json")
+	case GOB, BYTES:
+		request.Header.Set("Content-Type", "application/octet-stream")
+	case FORMDATA:
+		if writer != nil {
+			request.Header.Set("Content-Type", writer.FormDataContentType())
 		}
+	case NIL:
 	}
 
 	// 根据期望的响应内容类型设置 Accept 头
